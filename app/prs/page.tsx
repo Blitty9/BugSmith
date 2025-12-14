@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -62,7 +62,7 @@ export default function PRsPage() {
   const [mergeSuccess, setMergeSuccess] = useState(false);
 
   // Fetch PRs when component mounts or repo changes
-  const fetchPRs = async () => {
+  const fetchPRs = useCallback(async () => {
     if (!state.currentRepo) {
       setError("No repository selected. Please fetch issues from the Issues page first.");
       return;
@@ -87,14 +87,14 @@ export default function PRsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [state.currentRepo, setPRs]);
 
   // Auto-fetch PRs when repo is available
   useEffect(() => {
     if (state.currentRepo && state.prs.length === 0) {
       fetchPRs();
     }
-  }, [state.currentRepo]);
+  }, [state.currentRepo, state.prs.length, fetchPRs]);
 
   // Handle PR merge
   const handleMergePR = async () => {

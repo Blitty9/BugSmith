@@ -252,7 +252,7 @@ export default function IssuesPage() {
         <div className="rounded-md border border-border bg-background p-8 text-center fade-in-up relative z-0">
           <Github className="h-12 w-12 text-foreground-muted mx-auto mb-4" />
           <p className="text-foreground-muted">
-            Enter a repository name above and click "Fetch Issues" to load GitHub issues.
+            Enter a repository name above and click &quot;Fetch Issues&quot; to load GitHub issues.
           </p>
         </div>
       )}
