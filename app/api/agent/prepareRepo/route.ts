@@ -67,10 +67,40 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Clone or update the repository
+      // Double-check: if Git check fails, fall back to serverless mode
       let repoPath: string;
       try {
+        // Quick check if Git is available
+        const { exec } = await import("child_process");
+        const { promisify } = await import("util");
+        const execAsync = promisify(exec);
+        await execAsync("git --version", { timeout: 2000 });
+        
         repoPath = await cloneRepo(repo);
       } catch (error: any) {
+        // If Git is not available, fall back to serverless mode
+        if (error.message?.includes("git") || error.message?.includes("not found") || error.message?.includes("not in PATH")) {
+          console.log(`Git not available, falling back to serverless mode...`);
+          
+          // Use serverless approach
+          const branchResult = await createBranchViaAPI(repo, branchName);
+          
+          if (!branchResult.success && !branchResult.error?.includes("already exists")) {
+            return NextResponse.json(
+              { error: `Failed to create branch: ${branchResult.error}` },
+              { status: 500 }
+            );
+          }
+
+          const repoPath = `/tmp/bugsmith/${repo.replace("/", "-")}`;
+          
+          return NextResponse.json({
+            repoPath,
+            branchName,
+            success: true,
+          });
+        }
+        
         return NextResponse.json(
           { error: `Failed to clone repository: ${error.message}` },
           { status: 500 }
