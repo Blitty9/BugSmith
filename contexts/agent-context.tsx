@@ -273,6 +273,8 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       issues,
       prs: state.prs, // Preserve existing PRs
       errorMessage: undefined,
+      ignoredIssues: state.ignoredIssues || [],
+      issuePriorityOrder: state.issuePriorityOrder || [],
     });
 
     // Step configurations with logs and thoughts
@@ -739,63 +741,63 @@ export function AgentProvider({ children }: { children: ReactNode }) {
                 // Should not reach here, but handle gracefully
                 return;
               }
+              
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              if (checkCancelled()) return;
+              
+              // Check if files were changed
+              if (appliedPatchData && appliedPatchData.modifiedFiles && appliedPatchData.modifiedFiles.length > 0) {
+                addLog(i, `[SUCCESS] Modified ${appliedPatchData.modifiedFiles.length} file(s):`);
+                appliedPatchData.modifiedFiles.forEach((file: string) => {
+                  addLog(i, `  - ${file}`);
+                });
+                
+                // Record successful application in history
+                if (currentIssue && repoToUse) {
+                  addFixEntry(
+                    currentIssue,
+                    repoToUse,
+                    initialPatchData.patch || "",
+                    true,
+                    false,
+                    true,
+                    appliedPatchData.modifiedFiles || [],
+                    undefined,
+                    state.retryState?.attempt
+                  );
+                }
+                
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                if (checkCancelled()) return;
+                addLog(i, "[INFO] Creating commit...");
+                
+                // Update thought with file changes summary
+                const filesSummary = appliedPatchData.modifiedFiles.join(", ");
+                updateStep(i, {
+                  thought: `AI generated a patch that modified ${appliedPatchData.modifiedFiles.length} file(s): ${filesSummary}. The patch fixes the issue by applying the necessary code changes.`,
+                });
+
+                if (appliedPatchData.commitHash) {
+                  addLog(i, `[SUCCESS] Changes committed: ${appliedPatchData.commitHash.substring(0, 7)}`);
+                }
+                
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                if (checkCancelled()) return;
+                addLog(i, "[INFO] Pushing branch...");
+                
+                if (appliedPatchData.pushed) {
+                  addLog(i, `[SUCCESS] Branch ${branchName} pushed to remote`);
+                }
+              } else {
+                addLog(i, "[INFO] Patch generated but no files were modified.");
+                updateStep(i, {
+                  thought: "AI generated a patch but it did not result in file modifications. The issue may require manual intervention or a different approach.",
+                });
+              }
             } else {
               // No patch to preview (shouldn't happen, but handle gracefully)
               addLog(i, "[WARN] No patch generated for preview");
               continue;
-            }
-            
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            if (checkCancelled()) return;
-            
-            // Check if files were changed
-            if (appliedPatchData && appliedPatchData.modifiedFiles && appliedPatchData.modifiedFiles.length > 0) {
-              addLog(i, `[SUCCESS] Modified ${appliedPatchData.modifiedFiles.length} file(s):`);
-              appliedPatchData.modifiedFiles.forEach((file: string) => {
-                addLog(i, `  - ${file}`);
-              });
-              
-              // Record successful application in history
-              if (currentIssue && repoToUse) {
-                addFixEntry(
-                  currentIssue,
-                  repoToUse,
-                  initialPatchData.patch || "",
-                  true,
-                  false,
-                  true,
-                  appliedPatchData.modifiedFiles || [],
-                  undefined,
-                  state.retryState?.attempt
-                );
-              }
-              
-              await new Promise((resolve) => setTimeout(resolve, 300));
-              if (checkCancelled()) return;
-              addLog(i, "[INFO] Creating commit...");
-              
-              // Update thought with file changes summary
-              const filesSummary = appliedPatchData.modifiedFiles.join(", ");
-              updateStep(i, {
-                thought: `AI generated a patch that modified ${appliedPatchData.modifiedFiles.length} file(s): ${filesSummary}. The patch fixes the issue by applying the necessary code changes.`,
-              });
-
-              if (appliedPatchData.commitHash) {
-                addLog(i, `[SUCCESS] Changes committed: ${appliedPatchData.commitHash.substring(0, 7)}`);
-              }
-              
-              await new Promise((resolve) => setTimeout(resolve, 300));
-              if (checkCancelled()) return;
-              addLog(i, "[INFO] Pushing branch...");
-              
-              if (appliedPatchData.pushed) {
-                addLog(i, `[SUCCESS] Branch ${branchName} pushed to remote`);
-              }
-            } else {
-              addLog(i, "[INFO] Patch generated but no files were modified.");
-              updateStep(i, {
-                thought: "AI generated a patch but it did not result in file modifications. The issue may require manual intervention or a different approach.",
-              });
             }
           } else {
             if (checkCancelled()) return;
