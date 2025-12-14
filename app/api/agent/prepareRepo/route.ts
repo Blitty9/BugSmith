@@ -36,11 +36,27 @@ export async function POST(request: NextRequest) {
 
     // Check if we're in a serverless environment
     // Vercel sets VERCEL=1, AWS Lambda sets AWS_LAMBDA_FUNCTION_NAME
-    const isServerless = 
+    // Also check if Git is available - if not, use serverless mode
+    let isServerless = 
       process.env.VERCEL === "1" || 
       process.env.VERCEL || 
       process.env.AWS_LAMBDA_FUNCTION_NAME ||
       process.env.VERCEL_ENV;
+    
+    // If not detected as serverless, check if Git is available
+    if (!isServerless) {
+      try {
+        const { exec } = await import("child_process");
+        const { promisify } = await import("util");
+        const execAsync = promisify(exec);
+        await execAsync("git --version", { timeout: 2000 });
+        // Git is available, not serverless
+      } catch (error) {
+        // Git not available, treat as serverless
+        console.log(`[DEBUG] Git not available, using serverless mode`);
+        isServerless = true;
+      }
+    }
     
     console.log(`[DEBUG] Serverless detection: VERCEL=${process.env.VERCEL}, isServerless=${isServerless}`);
     const branchName = `bugsmith-fix-${issueNumber}`;
@@ -66,46 +82,10 @@ export async function POST(request: NextRequest) {
         success: true,
       });
     } else {
-      // Clone or update the repository
-      // Double-check: if Git check fails, fall back to serverless mode
+      // Clone or update the repository (only if Git is available)
       let repoPath: string;
       try {
-        // Quick check if Git is available
-        const { exec } = await import("child_process");
-        const { promisify } = await import("util");
-        const execAsync = promisify(exec);
-        await execAsync("git --version", { timeout: 2000 });
-        
         repoPath = await cloneRepo(repo);
-      } catch (error: any) {
-        // If Git is not available, fall back to serverless mode
-        if (error.message?.includes("git") || error.message?.includes("not found") || error.message?.includes("not in PATH")) {
-          console.log(`Git not available, falling back to serverless mode...`);
-          
-          // Use serverless approach
-          const branchResult = await createBranchViaAPI(repo, branchName);
-          
-          if (!branchResult.success && !branchResult.error?.includes("already exists")) {
-            return NextResponse.json(
-              { error: `Failed to create branch: ${branchResult.error}` },
-              { status: 500 }
-            );
-          }
-
-          const repoPath = `/tmp/bugsmith/${repo.replace("/", "-")}`;
-          
-          return NextResponse.json({
-            repoPath,
-            branchName,
-            success: true,
-          });
-        }
-        
-        return NextResponse.json(
-          { error: `Failed to clone repository: ${error.message}` },
-          { status: 500 }
-        );
-      }
 
       // Create branch for the fix
       try {
