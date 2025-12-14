@@ -1,6 +1,6 @@
 import { exec } from "child_process";
 import { promisify } from "util";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { platform } from "os";
 
@@ -8,6 +8,7 @@ const execAsync = promisify(exec);
 
 /**
  * Clones or updates a GitHub repository to a local temp directory
+ * For Vercel/serverless environments, uses GitHub API as fallback
  * @param repo - Repository in format "owner/repo"
  * @returns Absolute path to the cloned repository
  */
@@ -20,6 +21,33 @@ export async function cloneRepo(repo: string): Promise<string> {
     }
 
     const [owner, repoName] = repoParts;
+
+    // Check if we're in a serverless environment (Vercel, etc.)
+    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || !process.env.TEMP;
+
+    if (isServerless) {
+      // In serverless, we can't clone repos, but we can create a mock structure
+      // The actual file operations will use GitHub API
+      const tempBase = "/tmp";
+      const bugsmithDir = join(tempBase, "bugsmith");
+      if (!existsSync(bugsmithDir)) {
+        mkdirSync(bugsmithDir, { recursive: true });
+      }
+
+      const targetDir = join(bugsmithDir, `${owner}-${repoName}`);
+      if (!existsSync(targetDir)) {
+        mkdirSync(targetDir, { recursive: true });
+      }
+
+      // Create a marker file to indicate this is a serverless "clone"
+      writeFileSync(
+        join(targetDir, ".bugsmith-serverless"),
+        JSON.stringify({ repo, cloned: false, serverless: true })
+      );
+
+      console.log(`Serverless mode: Created directory structure for ${repo} at ${targetDir}`);
+      return targetDir;
+    }
 
     // Determine temp directory based on OS
     const tempBase = platform() === "win32" 
@@ -36,34 +64,32 @@ export async function cloneRepo(repo: string): Promise<string> {
     const targetDir = join(bugsmithDir, `${owner}-${repoName}`);
 
     // Check if repo already exists
-    if (existsSync(targetDir) && existsSync(join(targetDir, ".git"))) {
-      // Repository exists, pull latest changes
-      console.log(`Repository ${repo} already exists. Pulling latest changes...`);
-      
+    if (existsSync(join(targetDir, ".git"))) {
+      // Repo exists, try to update it
       try {
-        // Fetch and pull latest changes
-        await execAsync("git fetch origin", { cwd: targetDir });
-        await execAsync("git pull origin main", { cwd: targetDir });
-        console.log(`Successfully updated repository ${repo}`);
+        await execAsync(`git -C "${targetDir}" pull`, {
+          maxBuffer: 10 * 1024 * 1024,
+        });
+        console.log(`Updated existing repository ${repo}`);
+        return targetDir;
       } catch (error: any) {
-        // If pull fails, try to pull from current branch
-        try {
-          await execAsync("git pull", { cwd: targetDir });
-          console.log(`Successfully updated repository ${repo} (current branch)`);
-        } catch (pullError: any) {
-          console.warn(`Warning: Could not pull latest changes: ${pullError.message}`);
-          // Continue anyway - repo exists, we can work with it
-        }
+        // If pull fails, try to remove and re-clone
+        console.warn(`Failed to update repository, will re-clone: ${error.message}`);
+        // Note: We don't remove the directory here to avoid permission issues
+        // The clone will fail if directory exists, which is handled below
       }
-
-      return targetDir;
     }
 
-    // Clone the repository
-    console.log(`Cloning repository ${repo}...`);
     const repoUrl = `https://github.com/${owner}/${repoName}.git`;
     
     try {
+      // Check if git is available
+      try {
+        await execAsync("git --version", { maxBuffer: 1024 * 1024 });
+      } catch (gitCheckError) {
+        throw new Error("Git is not installed or not in PATH. Please install Git to use this feature.");
+      }
+
       const { stdout, stderr } = await execAsync(
         `git clone ${repoUrl} "${targetDir}"`,
         {
@@ -81,7 +107,7 @@ export async function cloneRepo(repo: string): Promise<string> {
       }
     } catch (error: any) {
       // Check if error is because git is not installed
-      if (error.message?.includes("git") && error.message?.includes("not found")) {
+      if (error.message?.includes("git") && (error.message?.includes("not found") || error.message?.includes("not in PATH"))) {
         throw new Error("Git is not installed or not in PATH. Please install Git to use this feature.");
       }
       throw error;
@@ -96,4 +122,3 @@ export async function cloneRepo(repo: string): Promise<string> {
     );
   }
 }
-

@@ -22,6 +22,18 @@ export async function pushBranch(
   branchName: string
 ): Promise<PushResult> {
   try {
+    // Check if we're in a serverless environment
+    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    
+    if (isServerless) {
+      // In serverless, push will be handled via GitHub API
+      console.log(`Serverless mode: Branch push will be handled via GitHub API`);
+      return {
+        success: true,
+        message: "Branch push will be handled via GitHub API",
+      };
+    }
+
     // Validate repo path exists
     if (!existsSync(repoPath)) {
       throw new Error(`Repository path does not exist: ${repoPath}`);

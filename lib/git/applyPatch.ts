@@ -325,6 +325,19 @@ export async function applyPatch(
   repoPath: string,
   patch: string
 ): Promise<ApplyPatchResult> {
+  // Check if we're in a serverless environment
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+  
+  if (isServerless) {
+    // In serverless, we can't use git apply
+    // Return error indicating serverless limitation
+    return {
+      success: false,
+      modifiedFiles: [],
+      error: "Git operations are not available in serverless environments. Please use a self-hosted deployment or GitHub API integration.",
+    };
+  }
+
   // Validate repo path exists
   if (!existsSync(repoPath)) {
     return {

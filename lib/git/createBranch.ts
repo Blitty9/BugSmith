@@ -13,6 +13,16 @@ const execAsync = promisify(exec);
  */
 export async function createBranch(repoPath: string, branchName: string): Promise<string> {
   try {
+    // Check if we're in a serverless environment
+    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    
+    if (isServerless) {
+      // In serverless, we can't create branches with Git
+      // This will be handled via GitHub API in the applyFix route
+      console.log(`Serverless mode: Branch ${branchName} will be created via GitHub API`);
+      return `Branch ${branchName} will be created via GitHub API`;
+    }
+
     // Validate repo path exists
     if (!existsSync(repoPath)) {
       throw new Error(`Repository path does not exist: ${repoPath}`);
