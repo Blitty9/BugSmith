@@ -121,7 +121,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if we're in a serverless environment
-    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    // Vercel sets VERCEL=1, AWS Lambda sets AWS_LAMBDA_FUNCTION_NAME
+    const isServerless = 
+      process.env.VERCEL === "1" || 
+      process.env.VERCEL || 
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.VERCEL_ENV;
+    
+    console.log(`[DEBUG] Serverless detection: VERCEL=${process.env.VERCEL}, isServerless=${isServerless}`);
 
     // Step 1: Identify relevant files
     console.log(`Finding relevant files for issue #${issue.number || issue.id}...`);

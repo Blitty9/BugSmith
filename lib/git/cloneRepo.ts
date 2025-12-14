@@ -23,7 +23,14 @@ export async function cloneRepo(repo: string): Promise<string> {
     const [owner, repoName] = repoParts;
 
     // Check if we're in a serverless environment (Vercel, etc.)
-    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || !process.env.TEMP;
+    // Vercel sets VERCEL=1, AWS Lambda sets AWS_LAMBDA_FUNCTION_NAME
+    // Also check if we're in /tmp (common serverless location) or if TEMP is not set
+    const isServerless = 
+      process.env.VERCEL === "1" || 
+      process.env.VERCEL || 
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.VERCEL_ENV ||
+      (!process.env.TEMP && !process.env.TMP && process.platform !== "win32");
 
     if (isServerless) {
       // In serverless, we can't clone repos, but we can create a mock structure
