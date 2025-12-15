@@ -10,41 +10,14 @@ import { formatDateTime } from "@/lib/utils";
 import { useAgent } from "@/contexts/agent-context";
 import Link from "next/link";
 
-// Mock data - TODO: Replace with actual API calls to GitHub
-// Using fixed dates to avoid hydration mismatches
-const mockActiveIssue: Issue = {
-  id: "123",
-  title: "Fix authentication token expiration bug",
-  difficulty: "medium",
-  status: "in-progress",
-  createdAt: "2024-01-15T10:00:00Z",
-  labels: ["bug", "authentication"],
-};
-
-const mockActivityLog = [
-  {
-    id: "1",
-    timestamp: "2024-01-15T14:55:00Z",
-    action: "PR #45 merged successfully",
-    type: "success",
-  },
-  {
-    id: "2",
-    timestamp: "2024-01-15T14:45:00Z",
-    action: "Deployment to production completed",
-    type: "success",
-  },
-  {
-    id: "3",
-    timestamp: "2024-01-15T14:30:00Z",
-    action: "Issue #122 resolved and closed",
-    type: "info",
-  },
-];
-
 export default function DashboardPage() {
   const { state, runAgent, isRunning, resetAgent } = useAgent();
-  const [activityLog, setActivityLog] = useState(mockActivityLog);
+  const [activityLog, setActivityLog] = useState<Array<{
+    id: string;
+    timestamp: string;
+    action: string;
+    type: "success" | "error" | "info";
+  }>>([]);
 
   // Add activity log entry when agent completes
   useEffect(() => {
@@ -88,8 +61,6 @@ export default function DashboardPage() {
   const currentStep = state.currentStepIndex >= 0 
     ? state.steps[state.currentStepIndex] 
     : null;
-
-  const activeIssue: Issue = state.currentIssue || mockActiveIssue;
 
   return (
     <div className="p-6 space-y-6">
@@ -196,8 +167,8 @@ export default function DashboardPage() {
               <div className="rounded-md border border-border bg-background p-4 text-center">
                 <p className="text-sm text-foreground-muted">
                   {state.issues.length > 0
-                    ? "No issue selected. Fetch issues from the Issues page."
-                    : "No issues loaded. Fetch issues from the Issues page."}
+                    ? "No issue selected. Select an issue from the Issues page."
+                    : "No data yet. Fetch issues from the Issues page to get started."}
                 </p>
               </div>
             )}
@@ -241,7 +212,9 @@ export default function DashboardPage() {
                   <FileText className="h-4 w-4 text-foreground-muted" />
                   <span className="text-sm text-foreground-muted">This Week</span>
                 </div>
-                <span className="text-lg font-semibold text-foreground">23</span>
+                <span className="text-lg font-semibold text-foreground">
+                  {state.issues.length > 0 ? state.issues.length : "—"}
+                </span>
               </div>
             </div>
           </CardContent>
@@ -257,31 +230,40 @@ export default function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {activityLog.map((activity, index) => (
-              <div
-                key={activity.id}
-                className="flex items-start gap-3 rounded-md border border-border bg-background p-3 list-item hover-scale transition-all duration-200"
-                style={{ animationDelay: `${0.5 + index * 0.1}s` }}
-              >
+          {activityLog.length > 0 ? (
+            <div className="space-y-3">
+              {activityLog.map((activity, index) => (
                 <div
-                  className={`mt-0.5 h-2 w-2 rounded-full transition-all duration-300 ${
-                    activity.type === "success"
-                      ? "bg-success"
-                      : activity.type === "error"
-                      ? "bg-destructive"
-                      : "bg-primary"
-                  }`}
-                />
-                <div className="flex-1">
-                  <div className="text-sm text-foreground">{activity.action}</div>
-                  <div className="mt-1 text-xs text-foreground-muted">
-                    {formatDateTime(activity.timestamp)}
+                  key={activity.id}
+                  className="flex items-start gap-3 rounded-md border border-border bg-background p-3 list-item hover-scale transition-all duration-200"
+                  style={{ animationDelay: `${0.5 + index * 0.1}s` }}
+                >
+                  <div
+                    className={`mt-0.5 h-2 w-2 rounded-full transition-all duration-300 ${
+                      activity.type === "success"
+                        ? "bg-success"
+                        : activity.type === "error"
+                        ? "bg-destructive"
+                        : "bg-primary"
+                    }`}
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm text-foreground">{activity.action}</div>
+                    <div className="mt-1 text-xs text-foreground-muted">
+                      {formatDateTime(activity.timestamp)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border border-border bg-background p-8 text-center">
+              <Activity className="h-8 w-8 text-foreground-muted mx-auto mb-3" />
+              <p className="text-sm text-foreground-muted">
+                No activity yet. Agent activity will appear here once you run the agent.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

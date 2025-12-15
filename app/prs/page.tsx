@@ -419,15 +419,6 @@ export default function PRsPage() {
                 </div>
               </div>
             )}
-            {/* TODO: Add CodeRabbit review comments here when API is integrated */}
-            <div className="rounded-md border border-border bg-background p-4 fade-in" style={{ animationDelay: "0.3s" }}>
-              <h3 className="text-sm font-medium text-foreground mb-2">
-                CodeRabbit Review
-              </h3>
-              <p className="text-sm text-foreground-muted">
-                Review comments will be loaded from CodeRabbit API...
-              </p>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
