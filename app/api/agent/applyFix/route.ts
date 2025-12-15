@@ -135,20 +135,35 @@ export async function POST(request: NextRequest) {
     let relevantFiles: string[];
     
     if (isServerless) {
-      // In serverless, we can't scan the file system
-      // Use a default set of common files or get from GitHub API
-      // For now, use common file patterns
-      relevantFiles = [
-        "src/index.js",
-        "src/index.ts",
-        "index.js",
-        "index.ts",
-        "app.js",
-        "app.ts",
-        "main.js",
-        "main.ts",
-      ];
-      console.log(`Serverless mode: Using default file list`);
+      // In serverless, list files from GitHub API
+      try {
+        const { listCodeFiles } = await import("@/lib/github/apiOperations");
+        relevantFiles = await listCodeFiles(repo, branchName, "", 20);
+        console.log(`Serverless mode: Found ${relevantFiles.length} code files via GitHub API`);
+        
+        if (relevantFiles.length === 0) {
+          return NextResponse.json({
+            success: false,
+            error: "No code files found in repository",
+            patch: undefined,
+            modifiedFiles: [],
+            commitHash: undefined,
+          }, {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      } catch (error: any) {
+        console.error(`Failed to list files from GitHub:`, error);
+        return NextResponse.json({
+          success: false,
+          error: `Failed to discover files: ${error.message || "Unknown error"}`,
+          patch: undefined,
+          modifiedFiles: [],
+          commitHash: undefined,
+        }, {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     } else {
       relevantFiles = await findRelevantFiles(repoPath);
       
@@ -183,6 +198,7 @@ export async function POST(request: NextRequest) {
         issue: issue as any,
         files: relevantFiles,
         repo: isServerless ? repo : undefined,
+        branch: branchName,
       });
     } catch (error: any) {
       console.error("Error generating patch:", error);

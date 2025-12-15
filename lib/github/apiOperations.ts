@@ -76,6 +76,80 @@ export async function getFiles(
 }
 
 /**
+ * List code files in a GitHub repository (recursively)
+ * Returns paths to .js, .ts, .jsx, .tsx files
+ */
+export async function listCodeFiles(
+  repo: string,
+  branch: string = "main",
+  path: string = "",
+  maxFiles: number = 20
+): Promise<string[]> {
+  const [owner, repoName] = repo.split("/");
+  const token = process.env.GITHUB_TOKEN;
+
+  if (!token) {
+    throw new Error("GITHUB_TOKEN environment variable is not set");
+  }
+
+  const files: string[] = [];
+  
+  async function scanDirectory(dirPath: string): Promise<void> {
+    if (files.length >= maxFiles) return;
+
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repoName}/contents/${dirPath ? encodeURIComponent(dirPath) : ""}?ref=${branch}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "BugSmith",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return; // Directory doesn't exist
+      }
+      throw new Error(`Failed to list directory: ${response.statusText}`);
+    }
+
+    const items = await response.json();
+    
+    // Handle both single file and array responses
+    const entries = Array.isArray(items) ? items : [items];
+
+    for (const item of entries) {
+      if (files.length >= maxFiles) break;
+
+      // Skip hidden files and common ignore directories
+      if (item.name.startsWith(".") && item.name !== ".env" && item.name !== ".env.local") {
+        continue;
+      }
+      if (item.name === "node_modules" || item.name === ".git" || item.name === "dist" || item.name === "build") {
+        continue;
+      }
+
+      if (item.type === "file") {
+        // Check if it's a code file
+        if (/\.(js|ts|jsx|tsx)$/i.test(item.name)) {
+          const filePath = dirPath ? `${dirPath}/${item.name}` : item.name;
+          files.push(filePath);
+        }
+      } else if (item.type === "dir") {
+        // Recursively scan subdirectories
+        const subPath = dirPath ? `${dirPath}/${item.name}` : item.name;
+        await scanDirectory(subPath);
+      }
+    }
+  }
+
+  await scanDirectory(path);
+  return files.slice(0, maxFiles);
+}
+
+/**
  * Apply a unified diff patch by parsing it and updating files via GitHub API
  */
 export function parsePatch(patch: string): Map<string, { oldContent: string; newContent: string }> {
